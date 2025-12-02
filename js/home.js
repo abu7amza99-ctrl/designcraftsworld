@@ -1,11 +1,5 @@
-/* home.js - معدل لتوحيد مظهر الشريط العلوي واللوحة الجانبية
-   ✅ تمت إضافة نظام فتح/غلق اللوحة الجانبية من قسم "زخرفة الأسماء"
-   ✅ باقي الأكواد الأصلية للمعرض والبحث والـ Lightbox كما هي تماماً
-*/
+/* home.js - معدل لتوحيد مظهر الشريط العلوي واللوحة الجانبية */
 
-/* ============================
-   فتح/غلق اللوحة الجانبية (مطابق لقسم زخرفة الأسماء)
-   ============================ */
 const menuBtn = document.getElementById("menuBtn");
 const sidePanel = document.getElementById("sidePanel");
 const closePanel = document.getElementById("closePanel");
@@ -13,9 +7,7 @@ const closePanel = document.getElementById("closePanel");
 if (menuBtn) menuBtn.addEventListener("click", () => sidePanel.classList.add("open"));
 if (closePanel) closePanel.addEventListener("click", () => sidePanel.classList.remove("open"));
 
-/* ============================
-   باقي كود الصفحة الأصلي كما هو
-   ============================ */
+/* ============================ */
 
 const gallery = document.getElementById('gallery');
 const searchInput = document.getElementById('searchInput');
@@ -26,7 +18,7 @@ const downloadBtn = document.getElementById('downloadBtn');
 
 let IMAGES = [];
 
-// تحميل JSON من مجلد الصور
+/* =========== تحميل JSON =========== */
 async function fetchImagesJson() {
   const url = '../assets/images.json';
   try {
@@ -35,65 +27,97 @@ async function fetchImagesJson() {
     const j = await res.json();
 
     let data = [];
-    if (Array.isArray(j)) {
-      data = j.map(it => typeof it === 'string' ? { name: it, file: it } : it);
-    } else if (j && Array.isArray(j.images)) {
-      data = j.images.map(it => typeof it === 'string' ? { name: it, file: it } : it);
+
+    // النظام الجديد (يحتوي مجلدات)
+    if (j && Array.isArray(j.items)) {
+      data = j.items; 
+    }
+    // النظام القديم (صور فقط)
+    else if (j && Array.isArray(j.images)) {
+      data = j.images.map(it => ({ name: it, file: it }));
     }
 
-    console.log(`✅ تم تحميل images.json (${data.length} صورة)`);
+    console.log(`✅ Loaded ${data.length} items`);
     return data;
+
   } catch (err) {
-    console.error('❌ فشل تحميل images.json', err);
+    console.error('❌ Error loading images.json', err);
     return [];
   }
 }
 
-// إنشاء عنصر بطاقة صورة
-function createImageCard(imgObj) {
-  const safeFile = encodeURIComponent(imgObj.file).replace(/%25/g, '%');
+/* =========== كرت صورة أو مجلد =========== */
+function createImageCard(obj) {
+  
+  /* === إذا كان مجلد === */
+  if (obj.type === "folder") {
+
+    const folderDiv = document.createElement("div");
+    folderDiv.className = "folder-item";
+    folderDiv.textContent = "📁 " + obj.name;
+
+    folderDiv.addEventListener("click", () => {
+      openFolder(obj);
+    });
+
+    return folderDiv;
+  }
+
+  /* === صورة عادية === */
+  const safeFile = encodeURIComponent(obj.file).replace(/%25/g, '%');
   const imgPath = `../assets/home/${safeFile}`;
 
   const a = document.createElement('a');
   a.href = imgPath;
   a.className = 'gallery-item';
-  a.setAttribute('data-name', imgObj.name || '');
+  a.setAttribute('data-name', obj.name || '');
 
   const image = document.createElement('img');
   image.src = imgPath;
-  image.alt = imgObj.name || '';
+  image.alt = obj.name || '';
   a.appendChild(image);
 
   a.addEventListener('click', (e) => {
     e.preventDefault();
-    openLightbox(imgPath, imgObj.file, imgObj.name);
+    openLightbox(imgPath, obj.file, obj.name);
   });
 
   return a;
 }
 
-// عرض الشبكة
+/* =========== فتح مجلد =========== */
+function openFolder(folderObj) {
+  gallery.innerHTML = "";
+
+  folderObj.files.forEach(file => {
+    const item = {
+      name: file,
+      file: `${folderObj.name}/${file}`,
+      type: "file"
+    };
+
+    gallery.appendChild(createImageCard(item));
+  });
+}
+
+/* =========== عرض الصور =========== */
 function renderGallery(arr) {
   gallery.innerHTML = '';
+
   if (!Array.isArray(arr) || arr.length === 0) {
     const p = document.createElement('p');
-    p.textContent = 'لا توجد صور للعرض';
-    p.style.color = '#000';
-    p.style.background = '#fff';
-    p.style.padding = '10px';
-    p.style.borderRadius = '8px';
+    p.textContent = 'لا توجد نتائج';
+    p.style.cssText = "padding:10px;background:#fff;border-radius:8px;color:#000";
     gallery.appendChild(p);
     return;
   }
+
   const frag = document.createDocumentFragment();
-  arr.forEach(img => {
-    const card = createImageCard(img);
-    frag.appendChild(card);
-  });
+  arr.forEach(img => frag.appendChild(createImageCard(img)));
   gallery.appendChild(frag);
 }
 
-// فتح Lightbox
+/* =========== Lightbox =========== */
 function openLightbox(src, filename, name) {
   lightbox.classList.add('open');
   lightbox.setAttribute('aria-hidden','false');
@@ -104,45 +128,47 @@ function openLightbox(src, filename, name) {
   downloadBtn.focus();
 }
 
-// إغلاق Lightbox
 function closeLightbox() {
   lightbox.classList.remove('open');
   lightbox.setAttribute('aria-hidden','true');
   lightboxImage.src = '';
 }
+
 if (lightboxClose) {
   lightboxClose.addEventListener('click', closeLightbox);
 }
+
 lightbox.addEventListener('click', (e) => {
   if (e.target === lightbox) closeLightbox();
 });
+
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeLightbox();
 });
 
-// تحميل الصور عند بدء الصفحة
+/* =========== INIT =========== */
 (async function init(){
-  try {
-    IMAGES = await fetchImagesJson();
-    renderGallery(IMAGES);
-  } catch (err) {
-    gallery.innerHTML = '<p style="padding:12px;background:#fff;color:#000;border-radius:8px">فشل تحميل قائمة الصور. تأكد من وجود الملف: assets/images.json</p>';
-  }
+  IMAGES = await fetchImagesJson();
+  renderGallery(IMAGES);
 })();
 
-// البحث الذكي
+/* =========== البحث =========== */
 if (searchInput) {
   searchInput.addEventListener('input', (e) => {
     const q = (e.target.value || '').trim().toLowerCase();
+
     if (!q) {
       renderGallery(IMAGES);
       return;
     }
+
     const normalizedQuery = q.replace(/[\s_-]+/g, '');
+
     const filtered = IMAGES.filter(i => {
       const normalizedName = (i.name || '').toLowerCase().replace(/[\s_-]+/g, '');
       return normalizedName.includes(normalizedQuery);
     });
+
     renderGallery(filtered);
   });
 }

@@ -1,5 +1,7 @@
 /* home.js - معدل لتوحيد مظهر الشريط العلوي واللوحة الجانبية
-   + دعم نظام المجلدات دون حذف النظام القديم
+   + دعم المجلدات
+   + دعم OCR عربي ذكي
+   + بدون حذف أي شيء من القديم
 */
 
 /* ============================
@@ -13,7 +15,7 @@ if (menuBtn) menuBtn.addEventListener("click", () => sidePanel.classList.add("op
 if (closePanel) closePanel.addEventListener("click", () => sidePanel.classList.remove("open"));
 
 /* ============================
-   باقي كود الصفحة الأصلي
+   باقي كود الصفحة الأصلي كما هو
    ============================ */
 
 const gallery = document.getElementById('gallery');
@@ -38,9 +40,7 @@ async function fetchImagesJson() {
 
     let images = [];
     if (Array.isArray(j.images)) {
-      images = j.images.map(it =>
-        typeof it === 'string' ? { name: it, file: it, isFolder: false } : it
-      );
+      images = j.images.map(it => ({ name: it, file: it, isFolder: false }));
     }
 
     let folders = [];
@@ -56,8 +56,8 @@ async function fetchImagesJson() {
 }
 
 /* ============================
-   بطاقة مجلد
-   ============================ */
+      بطاقة مجلد
+ ============================ */
 function createFolderCard(folderObj) {
   const div = document.createElement('div');
   div.className = 'gallery-folder';
@@ -71,16 +71,13 @@ function createFolderCard(folderObj) {
   div.style.fontSize = '20px';
   div.style.fontWeight = 'bold';
 
-  div.addEventListener('click', () => {
-    openFolder(folderObj.name);
-  });
-
+  div.addEventListener('click', () => openFolder(folderObj.name));
   return div;
 }
 
 /* ============================
-   بطاقة صورة (قديم)
-   ============================ */
+   بطاقة صورة (نفس القديم)
+ ============================ */
 function createImageCard(imgObj) {
   const safeFile = encodeURIComponent(imgObj.file).replace(/%25/g, '%');
   const imgPath = `../assets/home/${safeFile}`;
@@ -104,8 +101,8 @@ function createImageCard(imgObj) {
 }
 
 /* ============================
-   عرض الشبكة (صور + مجلدات)
-   ============================ */
+   عرض الشبكة
+ ============================ */
 function renderGallery(arr) {
   gallery.innerHTML = '';
   if (!Array.isArray(arr) || arr.length === 0) {
@@ -128,19 +125,16 @@ function renderGallery(arr) {
 }
 
 /* ============================
-   فتح المجلد وعرض صوره تلقائيًا
+   فتح مجلد (باستخدام files.json)
    ============================ */
 async function openFolder(folderName) {
-  const folderPath = `../assets/home/${folderName}/`;
+  const jsonPath = `../assets/home/${folderName}/files.json`;
 
   try {
-    const res = await fetch(folderPath);
-    const html = await res.text();
+    const res = await fetch(jsonPath);
+    const data = await res.json();
 
-    const files = [...html.matchAll(/href="([^"]+\.(jpg|jpeg|png|webp))"/gi)]
-      .map(m => m[1]);
-
-    const images = files.map(f => ({
+    const images = data.files.map(f => ({
       file: `${folderName}/${f}`,
       name: f,
       isFolder: false
@@ -148,13 +142,13 @@ async function openFolder(folderName) {
 
     renderGallery(images);
   } catch (err) {
-    console.error("❌ فشل فتح المجلد:", err);
+    console.error("❌ لم يتم العثور على files.json داخل:", folderName);
   }
 }
 
 /* ============================
-   نظام الـ Lightbox (قديم)
-   ============================ */
+   Lightbox (نفس القديم)
+ ============================ */
 function openLightbox(src, filename, name) {
   lightbox.classList.add('open');
   lightbox.setAttribute('aria-hidden','false');
@@ -171,9 +165,7 @@ function closeLightbox() {
   lightboxImage.src = '';
 }
 
-if (lightboxClose) {
-  lightboxClose.addEventListener('click', closeLightbox);
-}
+if (lightboxClose) lightboxClose.addEventListener('click', closeLightbox);
 lightbox.addEventListener('click', (e) => {
   if (e.target === lightbox) closeLightbox();
 });
@@ -182,8 +174,33 @@ document.addEventListener('keydown', (e) => {
 });
 
 /* ============================
+      OCR ذكي جداً (عربي)
+ ============================ */
+async function getOcrTextForImage(imgUrl) {
+  const key = "ocr_" + imgUrl;
+
+  // موجود سابقاً؟
+  const cached = localStorage.getItem(key);
+  if (cached) return cached;
+
+  try {
+    const result = await Tesseract.recognize(imgUrl, 'ara', {
+      logger: m => console.log("OCR:", m)
+    });
+
+    const text = result.data.text || "";
+    localStorage.setItem(key, text);
+    return text;
+
+  } catch (err) {
+    console.error("OCR error:", err);
+    return "";
+  }
+}
+
+/* ============================
    بدء الصفحة
-   ============================ */
+ ============================ */
 (async function init() {
   try {
     const data = await fetchImagesJson();
@@ -194,15 +211,15 @@ document.addEventListener('keydown', (e) => {
     renderGallery(all);
 
   } catch (err) {
-    gallery.innerHTML = '<p style="padding:12px;background:#fff;color:#000;border-radius:8px">فشل تحميل قائمة الصور.</p>';
+    gallery.innerHTML = '<p style="padding:12px;background:#fff;color:#000;border-radius:8px">فشل تحميل الصور.</p>';
   }
 })();
 
 /* ============================
-   البحث الذكي (صور + مجلدات)
-   ============================ */
+   البحث الذكي (صور + مجلدات + OCR)
+ ============================ */
 if (searchInput) {
-  searchInput.addEventListener('input', (e) => {
+  searchInput.addEventListener('input', async (e) => {
     const q = (e.target.value || '').trim().toLowerCase();
 
     const all = [...FOLDERS, ...IMAGES];
@@ -212,10 +229,33 @@ if (searchInput) {
       return;
     }
 
-    const filtered = all.filter(it =>
-      (it.name || '').toLowerCase().includes(q)
-    );
+    const results = [];
 
-    renderGallery(filtered);
+    for (const item of all) {
+
+      // 1 — مجلد
+      if (item.isFolder) {
+        if (item.name.toLowerCase().includes(q)) {
+          results.push(item);
+        }
+        continue;
+      }
+
+      // 2 — اسم الصورة
+      if (item.name.toLowerCase().includes(q)) {
+        results.push(item);
+        continue;
+      }
+
+      // 3 — داخل الصورة (OCR)
+      const imgUrl = `../assets/home/${item.file}`;
+      const text = await getOcrTextForImage(imgUrl);
+
+      if (text.toLowerCase().includes(q)) {
+        results.push(item);
+      }
+    }
+
+    renderGallery(results);
   });
 }

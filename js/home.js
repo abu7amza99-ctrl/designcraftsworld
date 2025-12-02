@@ -1,11 +1,10 @@
 /* home.js - معدل لتوحيد مظهر الشريط العلوي واللوحة الجانبية
-   + دعم المجلدات
-   + دعم OCR عربي ذكي
-   + بدون حذف أي شيء من القديم
+   ✅ تمت إضافة نظام فتح/غلق اللوحة الجانبية من قسم "زخرفة الأسماء"
+   ✅ باقي الأكواد الأصلية للمعرض والبحث والـ Lightbox كما هي تماماً
 */
 
 /* ============================
-   فتح/غلق اللوحة الجانبية
+   فتح/غلق اللوحة الجانبية (مطابق لقسم زخرفة الأسماء)
    ============================ */
 const menuBtn = document.getElementById("menuBtn");
 const sidePanel = document.getElementById("sidePanel");
@@ -26,11 +25,8 @@ const lightboxClose = document.querySelector('.lightbox-close');
 const downloadBtn = document.getElementById('downloadBtn');
 
 let IMAGES = [];
-let FOLDERS = [];
 
-/* ============================
-   تحميل JSON (صور + مجلدات)
-   ============================ */
+// تحميل JSON من مجلد الصور
 async function fetchImagesJson() {
   const url = '../assets/images.json';
   try {
@@ -38,46 +34,22 @@ async function fetchImagesJson() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const j = await res.json();
 
-    let images = [];
-    if (Array.isArray(j.images)) {
-      images = j.images.map(it => ({ name: it, file: it, isFolder: false }));
+    let data = [];
+    if (Array.isArray(j)) {
+      data = j.map(it => typeof it === 'string' ? { name: it, file: it } : it);
+    } else if (j && Array.isArray(j.images)) {
+      data = j.images.map(it => typeof it === 'string' ? { name: it, file: it } : it);
     }
 
-    let folders = [];
-    if (Array.isArray(j.folders)) {
-      folders = j.folders.map(name => ({ name, isFolder: true }));
-    }
-
-    return { images, folders };
+    console.log(`✅ تم تحميل images.json (${data.length} صورة)`);
+    return data;
   } catch (err) {
     console.error('❌ فشل تحميل images.json', err);
-    return { images: [], folders: [] };
+    return [];
   }
 }
 
-/* ============================
-      بطاقة مجلد
- ============================ */
-function createFolderCard(folderObj) {
-  const div = document.createElement('div');
-  div.className = 'gallery-folder';
-  div.textContent = folderObj.name;
-
-  div.style.cursor = 'pointer';
-  div.style.padding = '15px';
-  div.style.background = '#eee';
-  div.style.borderRadius = '10px';
-  div.style.textAlign = 'center';
-  div.style.fontSize = '20px';
-  div.style.fontWeight = 'bold';
-
-  div.addEventListener('click', () => openFolder(folderObj.name));
-  return div;
-}
-
-/* ============================
-   بطاقة صورة (نفس القديم)
- ============================ */
+// إنشاء عنصر بطاقة صورة
 function createImageCard(imgObj) {
   const safeFile = encodeURIComponent(imgObj.file).replace(/%25/g, '%');
   const imgPath = `../assets/home/${safeFile}`;
@@ -100,14 +72,12 @@ function createImageCard(imgObj) {
   return a;
 }
 
-/* ============================
-   عرض الشبكة
- ============================ */
+// عرض الشبكة
 function renderGallery(arr) {
   gallery.innerHTML = '';
   if (!Array.isArray(arr) || arr.length === 0) {
     const p = document.createElement('p');
-    p.textContent = 'لا توجد نتائج';
+    p.textContent = 'لا توجد صور للعرض';
     p.style.color = '#000';
     p.style.background = '#fff';
     p.style.padding = '10px';
@@ -115,40 +85,15 @@ function renderGallery(arr) {
     gallery.appendChild(p);
     return;
   }
-
   const frag = document.createDocumentFragment();
-  arr.forEach(item => {
-    const card = item.isFolder ? createFolderCard(item) : createImageCard(item);
+  arr.forEach(img => {
+    const card = createImageCard(img);
     frag.appendChild(card);
   });
   gallery.appendChild(frag);
 }
 
-/* ============================
-   فتح مجلد (باستخدام files.json)
-   ============================ */
-async function openFolder(folderName) {
-  const jsonPath = `../assets/home/${folderName}/files.json`;
-
-  try {
-    const res = await fetch(jsonPath);
-    const data = await res.json();
-
-    const images = data.files.map(f => ({
-      file: `${folderName}/${f}`,
-      name: f,
-      isFolder: false
-    }));
-
-    renderGallery(images);
-  } catch (err) {
-    console.error("❌ لم يتم العثور على files.json داخل:", folderName);
-  }
-}
-
-/* ============================
-   Lightbox (نفس القديم)
- ============================ */
+// فتح Lightbox
 function openLightbox(src, filename, name) {
   lightbox.classList.add('open');
   lightbox.setAttribute('aria-hidden','false');
@@ -159,13 +104,15 @@ function openLightbox(src, filename, name) {
   downloadBtn.focus();
 }
 
+// إغلاق Lightbox
 function closeLightbox() {
   lightbox.classList.remove('open');
   lightbox.setAttribute('aria-hidden','true');
   lightboxImage.src = '';
 }
-
-if (lightboxClose) lightboxClose.addEventListener('click', closeLightbox);
+if (lightboxClose) {
+  lightboxClose.addEventListener('click', closeLightbox);
+}
 lightbox.addEventListener('click', (e) => {
   if (e.target === lightbox) closeLightbox();
 });
@@ -173,89 +120,29 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeLightbox();
 });
 
-/* ============================
-      OCR ذكي جداً (عربي)
- ============================ */
-async function getOcrTextForImage(imgUrl) {
-  const key = "ocr_" + imgUrl;
-
-  // موجود سابقاً؟
-  const cached = localStorage.getItem(key);
-  if (cached) return cached;
-
+// تحميل الصور عند بدء الصفحة
+(async function init(){
   try {
-    const result = await Tesseract.recognize(imgUrl, 'ara', {
-      logger: m => console.log("OCR:", m)
-    });
-
-    const text = result.data.text || "";
-    localStorage.setItem(key, text);
-    return text;
-
+    IMAGES = await fetchImagesJson();
+    renderGallery(IMAGES);
   } catch (err) {
-    console.error("OCR error:", err);
-    return "";
-  }
-}
-
-/* ============================
-   بدء الصفحة
- ============================ */
-(async function init() {
-  try {
-    const data = await fetchImagesJson();
-    IMAGES = data.images;
-    FOLDERS = data.folders;
-
-    const all = [...FOLDERS, ...IMAGES];
-    renderGallery(all);
-
-  } catch (err) {
-    gallery.innerHTML = '<p style="padding:12px;background:#fff;color:#000;border-radius:8px">فشل تحميل الصور.</p>';
+    gallery.innerHTML = '<p style="padding:12px;background:#fff;color:#000;border-radius:8px">فشل تحميل قائمة الصور. تأكد من وجود الملف: assets/images.json</p>';
   }
 })();
 
-/* ============================
-   البحث الذكي (صور + مجلدات + OCR)
- ============================ */
+// البحث الذكي
 if (searchInput) {
-  searchInput.addEventListener('input', async (e) => {
+  searchInput.addEventListener('input', (e) => {
     const q = (e.target.value || '').trim().toLowerCase();
-
-    const all = [...FOLDERS, ...IMAGES];
-
     if (!q) {
-      renderGallery(all);
+      renderGallery(IMAGES);
       return;
     }
-
-    const results = [];
-
-    for (const item of all) {
-
-      // 1 — مجلد
-      if (item.isFolder) {
-        if (item.name.toLowerCase().includes(q)) {
-          results.push(item);
-        }
-        continue;
-      }
-
-      // 2 — اسم الصورة
-      if (item.name.toLowerCase().includes(q)) {
-        results.push(item);
-        continue;
-      }
-
-      // 3 — داخل الصورة (OCR)
-      const imgUrl = `../assets/home/${item.file}`;
-      const text = await getOcrTextForImage(imgUrl);
-
-      if (text.toLowerCase().includes(q)) {
-        results.push(item);
-      }
-    }
-
-    renderGallery(results);
+    const normalizedQuery = q.replace(/[\s_-]+/g, '');
+    const filtered = IMAGES.filter(i => {
+      const normalizedName = (i.name || '').toLowerCase().replace(/[\s_-]+/g, '');
+      return normalizedName.includes(normalizedQuery);
+    });
+    renderGallery(filtered);
   });
 }
